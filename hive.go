@@ -274,7 +274,7 @@ func innerConnect(host string, port int, auth string,
 	client := hiveserver.NewTCLIServiceClientFactory(transport, protocolFactory)
 
 	openSession := hiveserver.NewTOpenSessionReq()
-	openSession.ClientProtocol = hiveserver.TProtocolVersion_HIVE_CLI_SERVICE_PROTOCOL_V6
+	openSession.ClientProtocol = hiveserver.TProtocolVersion_HIVE_CLI_SERVICE_PROTOCOL_V1
 	openSession.Configuration = configuration.HiveConfiguration
 	openSession.Username = &configuration.Username
 	openSession.Password = &configuration.Password
@@ -401,17 +401,17 @@ func (c *Cursor) WaitForCompletion(ctx context.Context) {
 		finished := !(*status == hiveserver.TOperationState_INITIALIZED_STATE || *status == hiveserver.TOperationState_RUNNING_STATE)
 		if finished {
 			if *operationStatus.OperationState != hiveserver.TOperationState_FINISHED_STATE {
-				msg := operationStatus.TaskStatus
+				msg := operationStatus.Status
 				if msg == nil {
-					msg = operationStatus.ErrorMessage
+					msg = operationStatus.Status
 				}
 				if s := operationStatus.Status; msg == nil && s != nil {
-					msg = s.ErrorMessage
+					msg = s
 				}
 				if msg == nil {
-					*msg = fmt.Sprintf("gohive: operation in state (%v) without task status or error message", operationStatus.OperationState)
+					*msg.ErrorMessage = fmt.Sprintf("gohive: operation in state (%s) without task status or error message", operationStatus.Status)
 				}
-				c.Err = fmt.Errorf(*msg)
+				c.Err = fmt.Errorf(*msg.ErrorMessage)
 			}
 			break
 		}
@@ -513,10 +513,8 @@ func (c *Cursor) executeAsync(ctx context.Context, query string) {
 // Poll returns the current status of the last operation
 func (c *Cursor) Poll(getProgres bool) (status *hiveserver.TGetOperationStatusResp) {
 	c.Err = nil
-	progressGet := getProgres
 	pollRequest := hiveserver.NewTGetOperationStatusReq()
 	pollRequest.OperationHandle = c.operationHandle
-	pollRequest.GetProgressUpdate = &progressGet
 	var responsePoll *hiveserver.TGetOperationStatusResp
 	// Context ignored
 	responsePoll, c.Err = c.conn.client.GetOperationStatus(context.Background(), pollRequest)
